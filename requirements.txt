@@ -1,0 +1,10 @@
+ipympl
+ipykernel
+jupyter
+matplotlib
+scipy
+scikit-learn
+numpy
+pandas
+scikit-image
+monai
