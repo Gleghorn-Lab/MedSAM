@@ -9,5 +9,5 @@ pandas
 scikit-image
 monai
 opencv-python
-jupyter-matplotlib
 ipywidgets
+jupyterlab-widgets
