@@ -8,3 +8,5 @@ numpy
 pandas
 scikit-image
 monai
+opencv-python
+
