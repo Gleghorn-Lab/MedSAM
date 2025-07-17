@@ -6,7 +6,7 @@
 *.nii
 *.npy
 *.npz
-*.csv
+# *.csv
 *.log
 *.png
 data/
