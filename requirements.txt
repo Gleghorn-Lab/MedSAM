@@ -10,4 +10,4 @@ scikit-image
 monai
 opencv-python
 jupyter-matplotlib
-
+ipywidgets
