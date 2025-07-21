@@ -1,13 +1,20 @@
-ipympl
+torch==2.6.0 --index-url https://download.pytorch.org/whl/cu126
+torchvision==0.19.0 --index-url https://download.pytorch.org/whl/cu126
+segment-anything @ git+https://github.com/facebookresearch/segment-anything.git
+matplotlib
+numpy
+pillow
+datasets
+huggingface-hub
+ipywidgets
 ipykernel
 jupyter
-matplotlib
+tqdm
 scipy
-scikit-learn
-numpy
-pandas
 scikit-image
-monai
 opencv-python
-ipywidgets
+ipympl
+scikit-learn
+pandas
+monai
 jupyterlab-widgets
