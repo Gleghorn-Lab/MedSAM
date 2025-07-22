@@ -103,7 +103,7 @@ parser.add_argument(
     "-chk",
     "--checkpoint",
     type=str,
-    default="home/medsam-vit-b/medsam_vit_b.pth",
+    default="/home/medsam-vit-b/medsam_vit_b.pth",
     help="path to the trained model",
 )
 args = parser.parse_args()
