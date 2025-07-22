@@ -3,7 +3,9 @@
 """
 usage example:
 python MedSAM_Inference.py -i assets/img_demo.png -o ./ --box "[95,255,190,350]"
-
+07-22-2025 update
+ - updated path to model checkpoint
+ - updated box edge to yellow
 """
 
 # %% load environment
@@ -36,7 +38,7 @@ def show_box(box, ax):
     x0, y0 = box[0], box[1]
     w, h = box[2] - box[0], box[3] - box[1]
     ax.add_patch(
-        plt.Rectangle((x0, y0), w, h, edgecolor="blue", facecolor=(0, 0, 0, 0), lw=2)
+        plt.Rectangle((x0, y0), w, h, edgecolor="yellow", facecolor=(0, 0, 0, 0), lw=2)
     )
 
 
@@ -101,7 +103,7 @@ parser.add_argument(
     "-chk",
     "--checkpoint",
     type=str,
-    default="work_dir/MedSAM/medsam_vit_b.pth",
+    default="home/medsam-vit-b/medsam_vit_b.pth",
     help="path to the trained model",
 )
 args = parser.parse_args()

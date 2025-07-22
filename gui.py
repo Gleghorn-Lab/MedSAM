@@ -28,6 +28,8 @@ from PyQt5.QtWidgets import (
     QWidget,
     QShortcut,
 )
+""" 07-22-2025 update
+ - updated path to model checkpoint"""
 
 import numpy as np
 from skimage import transform, io
@@ -44,7 +46,7 @@ torch.cuda.manual_seed(2023)
 np.random.seed(2023)
 
 SAM_MODEL_TYPE = "vit_b"
-MedSAM_CKPT_PATH = "work_dir/MedSAM/medsam_vit_b.pth"
+MedSAM_CKPT_PATH = "/home/medsam-vit-b/medsam_vit_b.pth"
 MEDSAM_IMG_INPUT_SIZE = 1024
 
 if torch.backends.mps.is_available():
@@ -149,7 +151,7 @@ class Window(QWidget):
         self.view = QGraphicsView()
         self.view.setRenderHint(QPainter.Antialiasing)
 
-        pixmap = self.load_image()
+        #pixmap = self.load_image() Don't autoload image anymore after edits
 
         vbox = QVBoxLayout(self)
         vbox.addWidget(self.view)
@@ -191,15 +193,110 @@ class Window(QWidget):
 
         self.mask_c = self.prev_mask
         self.prev_mask = None
+#------------Updated image loading method 07-22-2025----------------
+
+    def add_navigation_buttons(self):
+        """Add navigation buttons for dataset browsing"""
+        from PyQt5.QtWidgets import QInputDialog
+        
+        # Create navigation layout if it doesn't exist
+        if not hasattr(self, 'nav_layout'):
+            nav_layout = QHBoxLayout()
+            
+            prev_btn = QPushButton("← Previous")
+            next_btn = QPushButton("Next →")
+            goto_btn = QPushButton("Go to...")
+            info_btn = QPushButton("Info")
+            
+            prev_btn.clicked.connect(self.prev_dataset_image)
+            next_btn.clicked.connect(self.next_dataset_image)
+            goto_btn.clicked.connect(self.goto_dataset_image)
+            info_btn.clicked.connect(self.show_dataset_info)
+            
+            nav_layout.addWidget(prev_btn)
+            nav_layout.addWidget(next_btn)
+            nav_layout.addWidget(goto_btn)
+            nav_layout.addWidget(info_btn)
+            
+            # Insert navigation at the top
+            self.layout().insertLayout(0, nav_layout)
+            self.nav_layout = nav_layout
+
+    def prev_dataset_image(self):
+        """Load previous image in dataset"""
+        if hasattr(self, 'dataset') and self.current_idx > 0:
+            self.current_idx -= 1
+            self.load_dataset_image_by_index(self.current_idx)
+        else:
+            print("Already at first image or no dataset loaded")
+
+    def next_dataset_image(self):
+        """Load next image in dataset"""
+        if hasattr(self, 'dataset') and self.current_idx < len(self.dataset[self.current_split]) - 1:
+            self.current_idx += 1
+            self.load_dataset_image_by_index(self.current_idx)
+        else:
+            print("Already at last image or no dataset loaded")
+
+    def goto_dataset_image(self):
+        """Go to specific image in dataset"""
+        if not hasattr(self, 'dataset'):
+            print("No dataset loaded")
+            return
+            
+        from PyQt5.QtWidgets import QInputDialog
+        max_idx = len(self.dataset[self.current_split]) - 1
+        idx, ok = QInputDialog.getInt(self, 'Go to Image', 
+                                    f'Enter index (0-{max_idx}):', 
+                                    self.current_idx, 0, max_idx)
+        if ok:
+            self.current_idx = idx
+            self.load_dataset_image_by_index(idx)
+
+    def show_dataset_info(self):
+        """Show current dataset info"""
+        if hasattr(self, 'dataset'):
+            total = len(self.dataset[self.current_split])
+            print(f"Dataset Info: Image {self.current_idx + 1}/{total} in split '{self.current_split}'")
+        else:
+            print("No dataset loaded")
+
+    def load_dataset_image_by_index(self, idx):
+        """Load specific image from dataset"""
+        sample = self.dataset[self.current_split][idx]
+        pil_image = sample['image']
+        img_3c = np.array(pil_image)
+        
+        if len(img_3c.shape) == 2:
+            img_3c = np.repeat(img_3c[:, :, None], 3, axis=-1)
+            
+        virtual_path = f"dataset_{self.current_split}_{idx}.png"
+        print(f"Loading image {idx + 1}/{len(self.dataset[self.current_split])}")
+        self.setup_image(img_3c, virtual_path)
 
     def load_image(self):
+        # Choice dialog: file browser or HuggingFace dataset
+        from PyQt5.QtWidgets import QMessageBox
+        
+        reply = QMessageBox.question(self, 'Image Source', 
+                                    'Load from:\n"File" - Browse local files\n"Dataset" - Use HuggingFace dataset',
+                                    QMessageBox.No | QMessageBox.Yes, 
+                                    QMessageBox.Yes)
+        
+        if reply == QMessageBox.Yes:  # Dataset
+            self.load_from_dataset()
+        else:  # File
+            self.load_from_file()
+
+    def load_from_file(self):
+        """Original file loading method"""
         file_path, file_type = QFileDialog.getOpenFileName(
             self, "Choose Image to Segment", ".", "Image Files (*.png *.jpg *.bmp)"
         )
 
         if file_path is None or len(file_path) == 0:
             print("No image path specified, plz select an image")
-            exit()
+            return
 
         img_np = io.imread(file_path)
         if len(img_np.shape) == 2:
@@ -207,8 +304,66 @@ class Window(QWidget):
         else:
             img_3c = img_np
 
+        self.setup_image(img_3c, file_path)
+
+    def load_from_dataset(self):
+        """Load from HuggingFace dataset"""
+        # Import here to avoid dependency issues if not using dataset
+        try:
+            from datasets import load_dataset
+            import huggingface_hub
+            from PyQt5.QtWidgets import QInputDialog
+            
+            # Get dataset info
+            dataset_name, ok = QInputDialog.getText(self, 'Dataset Name', 'Enter HuggingFace dataset name:')
+            if not ok or not dataset_name:
+                return
+                
+            # Load dataset
+            print(f"Loading dataset: {dataset_name}")
+            dataset = load_dataset(dataset_name, token=True)
+            
+            # Get available splits
+            splits = list(dataset.keys())
+            split_name, ok = QInputDialog.getItem(self, 'Dataset Split', 'Choose split:', splits, 0, False)
+            if not ok:
+                return
+                
+            # Get image index
+            max_idx = len(dataset[split_name]) - 1
+            img_idx, ok = QInputDialog.getInt(self, 'Image Index', f'Enter image index (0-{max_idx}):', 0, 0, max_idx)
+            if not ok:
+                return
+                
+            # Load the image
+            sample = dataset[split_name][img_idx]
+            pil_image = sample['image']
+            img_3c = np.array(pil_image)
+            
+            # Convert grayscale to RGB if needed
+            if len(img_3c.shape) == 2:
+                img_3c = np.repeat(img_3c[:, :, None], 3, axis=-1)
+                
+            # Create a virtual path for saving
+            virtual_path = f"{dataset_name}_{split_name}_{img_idx}.png"
+            
+            print(f"Loaded image #{img_idx} from {dataset_name}/{split_name}")
+            self.setup_image(img_3c, virtual_path)
+            
+            # Store dataset info for navigation
+            self.dataset = dataset
+            self.current_split = split_name
+            self.current_idx = img_idx
+            
+        except ImportError:
+            print("datasets library not available. Install with: pip install datasets")
+        except Exception as e:
+            print(f"Error loading dataset: {e}")
+
+    def setup_image(self, img_3c, image_path):
+        """Common image setup code"""
         self.img_3c = img_3c
-        self.image_path = file_path
+        self.image_path = image_path
         self.get_embeddings()
         pixmap = np2pixmap(self.img_3c)
 
@@ -226,6 +381,45 @@ class Window(QWidget):
         self.scene.mousePressEvent = self.mouse_press
         self.scene.mouseMoveEvent = self.mouse_move
         self.scene.mouseReleaseEvent = self.mouse_release
+        
+        # Add navigation buttons if dataset is loaded
+        if hasattr(self, 'dataset'):
+            self.add_navigation_buttons()       
+ #-------------------------------------------------------   
+    # def load_image(self): *original script*
+    #     file_path, file_type = QFileDialog.getOpenFileName(
+    #         self, "Choose Image to Segment", ".", "Image Files (*.png *.jpg *.bmp)"
+    #     )
+
+    #     if file_path is None or len(file_path) == 0:
+    #         print("No image path specified, plz select an image")
+    #         exit()
+
+    #     img_np = io.imread(file_path)
+    #     if len(img_np.shape) == 2:
+    #         img_3c = np.repeat(img_np[:, :, None], 3, axis=-1)
+    #     else:
+    #         img_3c = img_np
+
+    #     self.img_3c = img_3c
+    #     self.image_path = file_path
+    #     self.get_embeddings()
+    #     pixmap = np2pixmap(self.img_3c)
+
+    #     H, W, _ = self.img_3c.shape
+
+    #     self.scene = QGraphicsScene(0, 0, W, H)
+    #     self.end_point = None
+    #     self.rect = None
+    #     self.bg_img = self.scene.addPixmap(pixmap)
+    #     self.bg_img.setPos(0, 0)
+    #     self.mask_c = np.zeros((*self.img_3c.shape[:2], 3), dtype="uint8")
+    #     self.view.setScene(self.scene)
+
+    #     # events
+    #     self.scene.mousePressEvent = self.mouse_press
+    #     self.scene.mouseMoveEvent = self.mouse_move
+    #     self.scene.mouseReleaseEvent = self.mouse_release
 
     def mouse_press(self, ev):
         x, y = ev.scenePos().x(), ev.scenePos().y()
